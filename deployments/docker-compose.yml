@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  drift-validator-api:
+    build:
+      context: ..
+      dockerfile: deployments/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  payment-processor-mock:
+    image: nginx:alpine
+    ports:
+      - "8080:80"
+    environment:
+      - ENV_NAME=staging
+      - PAYMENT_DB_SSLMODE=require

@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fintech Microservices Configuration-Drift Validator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="dark-theme">
+  <!-- Header Navbar -->
+  <header class="navbar">
+    <div class="logo-group">
+      <div class="shield-icon">🛡️</div>
+      <div>
+        <h1>FINTECH DRIFT SHIELD <span class="badge badge-v2">v2.4</span></h1>
+        <p class="subtitle">Multi-Layer Microservice Configuration Gate & Risk Validator</p>
+      </div>
+    </div>
+    <div class="nav-controls">
+      <div class="mode-toggle">
+        <span class="toggle-label">Reviewer Mode:</span>
+        <button id="toggleReviewerMode" class="btn btn-toggle active">
+          <span id="modeIcon">👤</span> <span id="modeText">Non-Specialist Executive View</span>
+        </button>
+      </div>
+      <button id="btnRunBenchmark" class="btn btn-primary btn-sparkle">
+        ⚡ Run 50-Scenario Benchmark
+      </button>
+    </div>
+  </header>
+
+  <main class="dashboard-container">
+    <!-- Top Configuration Control Panel -->
+    <section class="panel control-panel glass-card">
+      <div class="panel-header">
+        <h2>⚙️ Deployment Target & Drift Simulator</h2>
+        <span class="status-indicator live">● SIMULATOR READY</span>
+      </div>
+      <div class="control-grid">
+        <div class="control-item">
+          <label for="selectService">Target Microservice</label>
+          <select id="selectService" class="form-select">
+            <option value="payment-processor">💳 payment-processor</option>
+            <option value="ledger-core">📘 ledger-core</option>
+            <option value="auth-vault">🔑 auth-vault</option>
+            <option value="risk-engine">⚡ risk-engine</option>
+          </select>
+        </div>
+        <div class="control-item">
+          <label for="selectRoute">Environment Route</label>
+          <select id="selectRoute" class="form-select">
+            <option value="staging->production">Staging (STG) ➔ Production (PROD)</option>
+            <option value="development->staging">Development (DEV) ➔ Staging (STG)</option>
+          </select>
+        </div>
+        <div class="control-item">
+          <label for="selectScenario">Inject Drift Scenario (Edge Case)</label>
+          <select id="selectScenario" class="form-select">
+            <option value="none">✅ Clean Release (Aligned - 0 Drift)</option>
+            <option value="insecure_db">🚨 Edge Case 1: Insecure DB SSL Mode (sslmode=disable)</option>
+            <option value="expired_vault_key">🔑 Edge Case 2: Vault Secret Key Rotation Expired</option>
+            <option value="memory_mismatch">💻 Edge Case 3: IaC Spec (4Gi) vs Container Runtime (512MB)</option>
+            <option value="missing_compliance_flag">🛡️ Edge Case 4: Missing PCI-DSS Compliance Flag</option>
+            <option value="sandbox_url_leak">🌐 Edge Case 5: Staging Bank Endpoint Leaked to Prod</option>
+          </select>
+        </div>
+        <div class="control-actions">
+          <button id="btnValidate" class="btn btn-accent">
+            🔍 Inspect Configuration Drift
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Main Results Grid: Gating Overview + Findings -->
+    <div class="dashboard-grid">
+      <!-- Left Column: Gate Status & Financial Risk Card -->
+      <div class="grid-column col-left">
+        <!-- Gate Status Card -->
+        <div class="panel gate-card glass-card" id="gateCard">
+          <div class="gate-header">
+            <h3>PRE-DEPLOYMENT GATE</h3>
+            <div id="gateBadge" class="gate-status-badge badge-pending">PENDING INSPECTION</div>
+          </div>
+          <div class="risk-meter-container">
+            <div class="risk-score-display">
+              <span class="score-label">Risk Score</span>
+              <span id="riskScoreValue" class="score-number">--</span>
+              <span class="score-max">/ 100</span>
+            </div>
+            <div class="progress-bar-bg">
+              <div id="riskProgressBar" class="progress-bar-fill" style="width: 0%;"></div>
+            </div>
+            <div class="gate-threshold-mark">Threshold: 25.0</div>
+          </div>
+
+          <div class="stats-mini-grid">
+            <div class="stat-box stat-crit">
+              <span class="stat-num" id="countCrit">0</span>
+              <span class="stat-lbl">CRITICAL</span>
+            </div>
+            <div class="stat-box stat-high">
+              <span class="stat-num" id="countHigh">0</span>
+              <span class="stat-lbl">HIGH</span>
+            </div>
+            <div class="stat-box stat-med">
+              <span class="stat-num" id="countMed">0</span>
+              <span class="stat-lbl">MEDIUM</span>
+            </div>
+            <div class="stat-box stat-low">
+              <span class="stat-num" id="countLow">0</span>
+              <span class="stat-lbl">LOW/INFO</span>
+            </div>
+          </div>
+
+          <p id="gateSummaryText" class="gate-summary-text">
+            Select a microservice and scenario above, then click <strong>Inspect Configuration Drift</strong> to run 4-layer validation.
+          </p>
+
+          <!-- Pipeline Action Controls -->
+          <div class="pipeline-actions">
+            <button id="btnDeployShielded" class="btn btn-success">
+              🛡️ Deploy via Shielded Gate
+            </button>
+            <button id="btnDeployLegacy" class="btn btn-warning">
+              ⚠️ Deploy via Legacy Pipeline (Unshielded)
+            </button>
+            <button id="btnRollback" class="btn btn-danger">
+              ⏪ Execute Automated Rollback
+            </button>
+          </div>
+        </div>
+
+        <!-- 4 Configuration Layer Summary Card -->
+        <div class="panel layer-card glass-card">
+          <h3>📂 4-Layer Inspection Audit</h3>
+          <ul class="layer-list">
+            <li class="layer-item" id="layerIaC">
+              <span class="layer-icon">📄</span>
+              <div class="layer-info">
+                <strong>Layer 1: Infrastructure Definitions (IaC)</strong>
+                <span class="layer-status">Kubernetes / Docker Compose Resource Limits</span>
+              </div>
+              <span class="layer-check-badge" id="badgeIaC">--</span>
+            </li>
+            <li class="layer-item" id="layerEnv">
+              <span class="layer-icon">🔑</span>
+              <div class="layer-info">
+                <strong>Layer 2: Environment Variables</strong>
+                <span class="layer-status">.env & ConfigMap Settings</span>
+              </div>
+              <span class="layer-check-badge" id="badgeEnv">--</span>
+            </li>
+            <li class="layer-item" id="layerSecrets">
+              <span class="layer-icon">🔒</span>
+              <div class="layer-info">
+                <strong>Layer 3: Secrets Metadata</strong>
+                <span class="layer-status">Vault Key Rotation & TTL Expiry</span>
+              </div>
+              <span class="layer-check-badge" id="badgeSecrets">--</span>
+            </li>
+            <li class="layer-item" id="layerRuntime">
+              <span class="layer-icon">⚡</span>
+              <div class="layer-info">
+                <strong>Layer 4: Runtime Snapshots</strong>
+                <span class="layer-status">Active Pod Memory & Live Container SSL</span>
+              </div>
+              <span class="layer-check-badge" id="badgeRuntime">--</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Right Column: Discrepancies & Recommendations View -->
+      <div class="grid-column col-right">
+        <div class="panel findings-card glass-card">
+          <div class="panel-header">
+            <h3>📋 Discrepancies & Action Recommendations</h3>
+            <span id="findingsCountBadge" class="badge badge-info">0 Items Found</span>
+          </div>
+
+          <div id="findingsContainer" class="findings-container">
+            <div class="empty-state">
+              <div class="empty-icon">🛡️</div>
+              <p>No drift inspection executed yet. Click <strong>Inspect Configuration Drift</strong> to view findings.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pipeline Deployment History & Rollback Logs -->
+    <section class="panel history-panel glass-card">
+      <div class="panel-header">
+        <h2>📜 CI/CD Migration & Pipeline Execution Log</h2>
+        <button id="btnClearLogs" class="btn btn-secondary btn-sm">Clear History</button>
+      </div>
+      <div class="table-wrapper">
+        <table class="data-table" id="tableHistory">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Timestamp</th>
+              <th>Service</th>
+              <th>Pipeline Mode</th>
+              <th>Scenario Applied</th>
+              <th>Status</th>
+              <th>Details</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyHistory">
+            <tr>
+              <td colspan="7" class="text-center">No deployment actions recorded yet.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Benchmark Experiment Results Modal / Section -->
+    <section id="sectionBenchmark" class="panel benchmark-panel glass-card hidden">
+      <div class="panel-header">
+        <h2>📊 50-Scenario Benchmark Experiment Results</h2>
+        <button id="btnCloseBenchmark" class="btn btn-close">✕</button>
+      </div>
+      <div id="benchmarkContent">
+        <!-- Rendered via JS -->
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>Fintech Microservices Configuration-Drift Validator & Gating System • Powered by Antigravity AI Engine</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
