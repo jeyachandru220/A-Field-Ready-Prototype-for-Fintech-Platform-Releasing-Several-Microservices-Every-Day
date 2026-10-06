@@ -8,6 +8,7 @@ on:
 
 jobs:
   validate-drift-and-test:
+    name: 4-Layer Configuration Drift Gate & Rollback Suite
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Source Code
@@ -17,20 +18,30 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.13'
+          cache: 'pip'
 
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install fastapi uvicorn pydantic pytest httpx pandas numpy
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; else pip install fastapi uvicorn pydantic pytest httpx pandas numpy; fi
 
       - name: Run Pytest Test Suite
         run: |
           pytest -v tests/
 
-      - name: Execute Pre-Flight Drift Gate Check (CLI)
+      - name: Execute Pre-Flight Drift Gate Check (Clean Scenario)
         run: |
           python cli/fintech_drift_val.py --service payment-processor --source-env staging --target-env production --scenario none
+
+      - name: Execute Automated Rollback & SHA-256 Delta Tracking Verification
+        run: |
+          python -c "from pipeline.legacy_deploy import DeploymentPipeline, PipelineMode; from src.models import MicroserviceName, Environment; p = DeploymentPipeline(); p.execute_deployment(MicroserviceName.PAYMENT_PROCESSOR, Environment.STAGING, Environment.PRODUCTION, PipelineMode.LEGACY_UNSHIELDED, 'insecure_db'); r = p.trigger_rollback(MicroserviceName.PAYMENT_PROCESSOR); assert r['status'] == 'ROLLBACK_SUCCESSFUL'"
 
       - name: Execute 50-Scenario Benchmark Experiment
         run: |
           python experiments/benchmark.py
+
+      - name: Verify Reproducible Execution Script
+        run: |
+          chmod +x scripts/run_ci_pipeline.sh
+          ./scripts/run_ci_pipeline.sh

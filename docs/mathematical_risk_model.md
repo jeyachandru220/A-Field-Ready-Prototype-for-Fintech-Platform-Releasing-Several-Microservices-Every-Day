@@ -1,75 +1,98 @@
 # Mathematical Risk Model & Scoring Matrix Specification
 
-This document details the mathematical model, weighting matrix, environmental scale factors, and threshold logic used by the Configuration-Drift Validator to calculate the unified Risk Score ($0 \text{ to } 100$) and estimate financial risk exposure.
+This document provides the formal mathematical specification, weighting matrices, environment scale factors, gating proofs, and financial exposure formulas utilized by the **Fintech Configuration-Drift Validator**.
 
 ---
 
 ## 1. Unified Risk Score Mathematical Formula
 
-$$\text{Risk Score} = \min\left(100.0, \, \sum_{i=1}^{N} W(R_i) \cdot E(T) \cdot C(K_i)\right)$$
+The overall pre-flight Risk Score ($S$) is bounded in the range $[0.0, 100.0]$ and calculated as:
+
+$$S = \min\left(100.0, \, \sum_{i=1}^{N} W(R_i) \cdot E(T) \cdot C(K_i)\right)$$
 
 Where:
-- $N$ is the total number of detected configuration discrepancies.
-- $W(R_i)$ is the Base Severity Weight for risk level $R_i$.
-- $E(T)$ is the Target Environment Multiplier for target environment $T$.
-- $C(K_i)$ is the Category Impact Multiplier for category $K_i$.
+- $N \in \mathbb{N}_0$ is the total count of detected configuration discrepancies.
+- $W(R_i)$ is the **Base Severity Weight** associated with risk level $R_i$.
+- $E(T)$ is the **Target Environment Scale Factor** for target deployment environment $T$.
+- $C(K_i)$ is the **Category Impact Multiplier** for functional category $K_i$.
 
 ---
 
-## 2. Base Severity Weight Matrix $W(R_i)$
+## 2. Weighting & Multiplier Matrices
 
-- **CRITICAL Risk Weight**: $W(\text{CRITICAL}) = 40.0$
-  - Applied to unencrypted Production database transport (`sslmode=disable`), expired Vault secret keys, unmasked PAN credit card logging, and staging sandbox endpoint leaks.
-- **HIGH Risk Weight**: $W(\text{HIGH}) = 20.0$
-  - Applied to container memory allocation cap discrepancies (IaC 4Gi vs container 512MB) and secret version mismatches.
-- **MEDIUM Risk Weight**: $W(\text{MEDIUM}) = 8.0$
-  - Applied to unrotated vault keys approaching TTL expiration and unaligned timeout settings.
-- **LOW Risk Weight**: $W(\text{LOW}) = 2.0$
-  - Applied to verbose logging levels in non-production environments.
-- **INFO Risk Weight**: $W(\text{INFO}) = 0.0$
-  - Applied to expected environment scaling parameters (e.g. min replicas 2 in Staging vs 4 in Production).
+### A. Base Severity Weight Matrix $W(R_i)$
+
+| Risk Level ($R_i$) | Base Weight $W(R_i)$ | Description & Scenario Trigger |
+| :--- | :---: | :--- |
+| **CRITICAL** | $40.0$ | Direct exposure of customer PAN, unencrypted DB transport (`sslmode=disable`), expired secrets, staging URL in production. |
+| **HIGH** | $20.0$ | Substantial reliability/capacity risks, IaC vs Runtime memory limits (e.g. 4Gi spec vs 512Mi live container). |
+| **MEDIUM** | $8.0$ | Approaching secret TTL expiration, unaligned timeout parameters. |
+| **LOW** | $2.0$ | Minor non-blocking variations (e.g. verbose logging levels in non-prod). |
+| **INFO** | $0.0$ | Intentional environment scaling parameters (e.g. replica count dev=1, prod=4). |
+
+### B. Target Environment Multiplier $E(T)$
+
+| Environment ($T$) | Multiplier $E(T)$ | Rationale |
+| :--- | :---: | :--- |
+| **Production** | $1.00$ | Live financial transactions and active user access. Full risk weighting. |
+| **Staging** | $0.50$ | Pre-production testing environment. Reduced financial blast radius. |
+| **Development** | $0.20$ | Isolated developer environment. Internal testing sandbox. |
+
+### C. Category Impact Multiplier $C(K_i)$
+
+| Category ($K_i$) | Multiplier $C(K_i)$ | Regulatory / Governance Alignment |
+| :--- | :---: | :--- |
+| **Security** | $1.25$ | PCI-DSS Requirement 4.1, GDPR Article 32, SOC 2 Trust Principles. |
+| **Compliance** | $1.25$ | PCI-DSS Requirement 3.4 (Unmasked PAN storage), SEC Rule 17a-4. |
+| **Reliability** | $1.00$ | High Availability (HA) SLAs, FINRA operational resilience requirements. |
+| **Operational & Financial** | $1.00$ | Partner API gateway routing, ledger settlement integrity. |
 
 ---
 
-## 3. Environmental & Category Multipliers
+## 3. Pre-Deployment Gating Logic & Mathematical Proof
 
-### Target Environment Multiplier $E(T)$
-- Production ($T = \text{production}$): $E(\text{production}) = 1.0$
-- Staging ($T = \text{staging}$): $E(\text{staging}) = 0.5$
-- Development ($T = \text{development}$): $E(\text{development}) = 0.2$
-
-### Category Impact Multiplier $C(K_i)$
-- Security Category ($K_i = \text{Security}$): $C = 1.25$
-- Compliance Category ($K_i = \text{Compliance}$): $C = 1.25$
-- Operational & Financial ($K_i = \text{Operational}$): $C = 1.0$
-- Reliability & Capacity ($K_i = \text{Reliability}$): $C = 1.0$
-
----
-
-## 4. Threshold & Pre-Deployment Gating Logic
+The automated deployment gate evaluates two mandatory safety constraints:
 
 $$\text{Gate Decision} = \begin{cases} 
-\text{APPROVED}, & \text{if } \text{Risk Score} < 25.0 \quad \text{AND} \quad N_{\text{CRITICAL}} = 0 \\
-\text{BLOCKED}, & \text{if } \text{Risk Score} \ge 25.0 \quad \text{OR} \quad N_{\text{CRITICAL}} \ge 1
+\text{APPROVED}, & \text{if } S < 25.0 \quad \text{AND} \quad N_{\text{CRITICAL}} = 0 \\
+\text{BLOCKED}, & \text{if } S \ge 25.0 \quad \text{OR} \quad N_{\text{CRITICAL}} \ge 1
 \end{cases}$$
 
-### Justification for Threshold = 25.0
-- A single **HIGH** discrepancy ($W = 20.0$) yields a Risk Score of $20.0$, which is under $25.0$ and permits deployment if no Critical issues exist.
-- Two **HIGH** discrepancies ($20.0 + 20.0 = 40.0$) exceed $25.0$ and trigger an automatic block.
-- Any single **CRITICAL** discrepancy ($W = 40.0$) automatically breaches both the $25.0$ threshold and the $N_{\text{CRITICAL}} = 0$ constraint, guaranteeing immediate pre-flight deployment abortion.
+### Mathematical Boundary Proof for $S_{\text{threshold}} = 25.0$
+
+| Scenario Test Case | Formula Calculation | Risk Score ($S$) | Gate Result | Architectural Rationale |
+| :--- | :--- | :---: | :---: | :--- |
+| **1 Low Operational Risk (Prod)** | $2.0 \times 1.00 \times 1.00$ | $2.0$ | **APPROVED** | Permissible minor drift. |
+| **1 Medium Operational Risk (Prod)** | $8.0 \times 1.00 \times 1.00$ | $8.0$ | **APPROVED** | Non-critical operational deviation. |
+| **1 High Reliability Risk (Prod)** | $20.0 \times 1.00 \times 1.00$ | $20.0$ | **APPROVED** | Single non-critical performance drift permitted ($20.0 < 25.0$). |
+| **1 High Security Risk (Prod)** | $20.0 \times 1.00 \times 1.25$ | $25.0$ | **BLOCKED** | Security multiplier elevates High risk to exact threshold ($\ge 25.0$). |
+| **2 High Reliability Risks (Prod)** | $(20.0 + 20.0) \times 1.00 \times 1.00$ | $40.0$ | **BLOCKED** | Compound high risk breaches maximum safety limit ($40.0 \ge 25.0$). |
+| **1 Critical Security Risk (Prod)** | $40.0 \times 1.00 \times 1.25$ | $50.0$ | **BLOCKED** | Critical risk triggers both threshold ($50 \ge 25$) and $N_{\text{CRITICAL}} \ge 1$. |
+| **1 Critical Security Risk (Staging)**| $40.0 \times 0.50 \times 1.25$ | $25.0$ | **BLOCKED** | Staging critical drift breaches threshold even with environment scaling. |
+
+> [!IMPORTANT]
+> **Conclusion**: $S_{\text{threshold}} = 25.0$ guarantees that **no single Critical risk** or **combination of High risks** can bypass pre-flight validation into Production.
 
 ---
 
-## 5. Financial Risk Estimation Formula
+## 4. Financial Risk Exposure Estimation Model
 
-$$\text{Estimated Financial Risk} = \left(\text{Estimated Downtime Hours} \times \text{Hourly Revenue at Risk}\right) + \text{Regulatory Penalty Base}$$
+Financial risk exposure ($\text{FE}$) represents the total prospective monetary loss resulting from deploying drifted configurations:
 
-- **Payment Outage (CRITICAL Secret Expiry / Insecure SSL)**:
-  - Estimated Downtime: 1.5 hours
-  - Hourly Revenue at Risk: $100,000 / hr
-  - Regulatory Fine (PCI-DSS): $100,000
-  - Total Financial Risk: $\$150,000 + \$100,000 = \$250,000+$
-- **Out-of-Memory Pod Crash (IaC vs Runtime Memory Mismatch)**:
-  - Estimated Downtime: 0.8 hours
-  - Hourly Revenue at Risk: $100,000 / hr
-  - Total Financial Risk: $\$80,000$
+$$\text{FE} = \left( T_{\text{downtime}} \times R_{\text{hourly}} \right) + P_{\text{regulatory}} + C_{\text{remediation}}$$
+
+Where:
+- $T_{\text{downtime}}$: Estimated Mean Time To Recovery (MTTR) in hours.
+- $R_{\text{hourly}}$: Revenue generated by transaction processing per hour ($\$100,000/\text{hr}$).
+- $P_{\text{regulatory}}$: Base regulatory fines (PCI-DSS non-compliance, GDPR data exposure).
+- $C_{\text{remediation}}$: Emergency engineering incident response costs.
+
+### Scenario Risk Breakdown Matrix
+
+| Drift Scenario | Root Cause | $T_{\text{downtime}}$ | $P_{\text{regulatory}}$ | Total Estimated Financial Exposure ($\text{FE}$) |
+| :--- | :--- | :---: | :---: | :---: |
+| **Insecure DB SSL Transport** | `PAYMENT_DB_SSLMODE=disable` | 1.5 hrs | $\$100,000$ | **$\$250,000+$** |
+| **Leaked Staging Endpoint** | `BANK_GATEWAY_URL` points to test server | 2.5 hrs | $\$100,000$ | **$\$350,000+$** |
+| **Expired Vault Secret Key** | Auth key expired without rotation | 1.0 hrs | $\$50,000$ | **$\$150,000+$** |
+| **IaC vs Runtime OOM Crash** | IaC 4Gi vs active container 512Mi limit | 0.8 hrs | $\$0$ | **$\$80,000+$** |
+| **Disabled PAN Masking** | `MANDATE_STRIP_PAN=false` | 4.0 hrs | $\$500,000$ | **$\$900,000+$** |

@@ -56,19 +56,45 @@ class ConfigurationDriftValidator:
         # Layer 4: Runtime Snapshots & Cross-Layer (IaC vs Runtime)
         cls._compare_runtime_snapshots(source_config, target_config, drifts, svc_name)
 
-        # Calculate counts & risk score
+        # Calculate counts & risk score using unified mathematical model:
+        # Risk Score = min(100.0, sum( W(R_i) * E(T) * C(K_i) ))
         crit = sum(1 for d in drifts if d.risk_level == RiskLevel.CRITICAL)
         high = sum(1 for d in drifts if d.risk_level == RiskLevel.HIGH)
         med = sum(1 for d in drifts if d.risk_level == RiskLevel.MEDIUM)
         low = sum(1 for d in drifts if d.risk_level == RiskLevel.LOW)
         info = sum(1 for d in drifts if d.risk_level == RiskLevel.INFO)
 
-        raw_score = (
-            crit * cls.CRITICAL_RISK_WEIGHT +
-            high * cls.HIGH_RISK_WEIGHT +
-            med * cls.MEDIUM_RISK_WEIGHT +
-            low * cls.LOW_RISK_WEIGHT
-        )
+        # Target Environment Multiplier E(T)
+        env_multipliers = {
+            Environment.PRODUCTION: 1.0,
+            Environment.STAGING: 0.5,
+            Environment.DEVELOPMENT: 0.2
+        }
+        e_t = env_multipliers.get(target_config.environment, 1.0)
+
+        raw_score = 0.0
+        for d in drifts:
+            # Base weight W(R_i)
+            if d.risk_level == RiskLevel.CRITICAL:
+                w = cls.CRITICAL_RISK_WEIGHT
+            elif d.risk_level == RiskLevel.HIGH:
+                w = cls.HIGH_RISK_WEIGHT
+            elif d.risk_level == RiskLevel.MEDIUM:
+                w = cls.MEDIUM_RISK_WEIGHT
+            elif d.risk_level == RiskLevel.LOW:
+                w = cls.LOW_RISK_WEIGHT
+            else:
+                w = 0.0
+
+            # Category Multiplier C(K_i)
+            cat_upper = (d.category or "").upper()
+            if "SECURITY" in cat_upper or "COMPLIANCE" in cat_upper:
+                c_k = 1.25
+            else:
+                c_k = 1.0
+
+            raw_score += w * e_t * c_k
+
         risk_score = min(100.0, round(raw_score, 1))
 
         # Passed gate if risk score < gate_threshold AND 0 CRITICAL risks

@@ -1,0 +1,28 @@
+# Kubernetes Canary Ingress Manifest for Atomic Traffic Shifting during Automated Rollback
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: payment-processor-canary-ingress
+  namespace: production
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/canary: "true"
+    # Atomic traffic weight set to 0 to isolate drifted container state instantly (<500ms)
+    nginx.ingress.kubernetes.io/canary-weight: "0"
+    nginx.ingress.kubernetes.io/canary-by-header: "X-Canary-Test"
+spec:
+  tls:
+  - hosts:
+    - payments.bank.internal
+    secretName: payment-prod-tls-cert
+  rules:
+  - host: payments.bank.internal
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: payment-processor-canary
+            port:
+              number: 8080

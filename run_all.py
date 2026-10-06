@@ -1,6 +1,6 @@
 """
 Unified Execution Script for Fintech Configuration-Drift Validator.
-Runs Pytest test suite, CLI validation checks, benchmark experiment, and optional Web Server startup.
+Runs Pytest test suite, CLI validation checks, automated rollback verification, benchmark experiment, and optional Web Server startup.
 """
 
 import sys
@@ -41,7 +41,13 @@ def main():
         "CLI Pre-Flight Drift Check (Clean Release)"
     )
 
-    # 3. Run Benchmark Experiment
+    # 3. Run Automated Rollback Verification Step
+    run_command(
+        "python -c \"from pipeline.legacy_deploy import DeploymentPipeline, PipelineMode; from src.models import MicroserviceName, Environment; p = DeploymentPipeline(); p.execute_deployment(MicroserviceName.PAYMENT_PROCESSOR, Environment.STAGING, Environment.PRODUCTION, PipelineMode.LEGACY_UNSHIELDED, 'insecure_db'); r = p.trigger_rollback(MicroserviceName.PAYMENT_PROCESSOR); print('Rollback Verification Status:', r['status'])\"",
+        "Verifying SHA-256 Snapshot Delta Tracking & Automated Rollback Engine"
+    )
+
+    # 4. Run Benchmark Experiment
     run_command("python experiments/benchmark.py", "Executing 50-Scenario Benchmark Experiment")
 
     print("================================================================================")

@@ -5,20 +5,50 @@ services:
     build:
       context: ..
       dockerfile: deployments/Dockerfile
+    container_name: drift-validator-api
     ports:
       - "8000:8000"
     environment:
       - PYTHONUNBUFFERED=1
+      - PORT=8000
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
       interval: 10s
       timeout: 5s
       retries: 3
+    networks:
+      - fintech-mesh
 
-  payment-processor-mock:
+  payment-processor-stg:
     image: nginx:alpine
+    container_name: payment-processor-stg
     ports:
-      - "8080:80"
+      - "8081:80"
     environment:
       - ENV_NAME=staging
+      - PAYMENT_DB_HOST=db-staging.payments.internal
       - PAYMENT_DB_SSLMODE=require
+      - BANK_GATEWAY_URL=https://staging-api.bank-partner.test/v1
+      - MAX_DB_POOL_SIZE=50
+      - MANDATE_STRIP_PAN=true
+    networks:
+      - fintech-mesh
+
+  payment-processor-prod:
+    image: nginx:alpine
+    container_name: payment-processor-prod
+    ports:
+      - "8082:80"
+    environment:
+      - ENV_NAME=production
+      - PAYMENT_DB_HOST=db-production.payments.internal
+      - PAYMENT_DB_SSLMODE=require
+      - BANK_GATEWAY_URL=https://api.payments.bank.internal/v1
+      - MAX_DB_POOL_SIZE=100
+      - MANDATE_STRIP_PAN=true
+    networks:
+      - fintech-mesh
+
+networks:
+  fintech-mesh:
+    driver: bridge
